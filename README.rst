@@ -86,6 +86,14 @@ Contributors
 Dev Log
 =======
 
+Release **0.9.0**:
+
+- **Important**: potentially breaking change. Spec is rebuilt and updated to support gNMI of version ``0.10.0``, generated from `openconfig/gnmi v0.14.1 <https://github.com/openconfig/gnmi/tree/v0.14.1/proto>`_. The generated code requires ``protobuf>=7.35.1,<8`` and ``grpcio>=1.84.0``, and therefore Python 3.10 or later.
+- Added ``scripts/regen_protos.sh`` to regenerate the bundled spec from an ``openconfig/gnmi`` release.
+- Implemented `Commit Confirmed Extension <https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-commit-confirmed.md>`_ for ``set()``. Pass ``extension={"commit": {"id": "c1", "commit": {"rollback_duration": 60}}}`` to start a commit, then ``confirm``, ``cancel`` or ``set_rollback_duration`` with the same ``id``. Rollback duration is seconds as ``int`` or ``float``, or a ``datetime.timedelta``.
+- Deprecated aliases, which are removed from the gNMI specification. ``use_aliases: False`` in a subscription is ignored with a ``DeprecationWarning``; ``use_aliases: True`` and the ``aliases`` argument of ``subscribe()`` raise ``ValueError``. The ``alias`` key of a notification is always ``None``.
+- Moved ``setup.py`` from ``distutils``, which is removed in Python 3.12, to ``setuptools``.
+
 Release **0.8.15**:
 
 - IPv6 support: `Issue 166 <https://github.com/akarneliuk/pygnmi/pull/166>`_.
