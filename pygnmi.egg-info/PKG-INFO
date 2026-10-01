@@ -1,9 +1,9 @@
 Metadata-Version: 2.4
 Name: pygnmi
-Version: 0.8.15
+Version: 0.9.0
 Summary: Pure Python gNMI client to manage network functions and collect telemetry.
 Home-page: https://github.com/akarneliuk/pygnmi
-Download-URL: https://github.com/akarneliuk/pygnmi/archive/v0.8.15.tar.gz
+Download-URL: https://github.com/akarneliuk/pygnmi/archive/v0.9.0.tar.gz
 Author: Anton Karneliuk
 Author-email: anton@karneliuk.com
 License: bsd-3-clause
@@ -16,15 +16,16 @@ Classifier: Operating System :: OS Independent
 Classifier: Topic :: System :: Networking
 Classifier: License :: OSI Approved :: BSD License
 Classifier: Programming Language :: Python :: 3
-Classifier: Programming Language :: Python :: 3.7
-Classifier: Programming Language :: Python :: 3.8
-Classifier: Programming Language :: Python :: 3.9
 Classifier: Programming Language :: Python :: 3.10
 Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: 3.14
+Requires-Python: >=3.10
 Description-Content-Type: text/x-rst
 License-File: LICENSE.txt
-Requires-Dist: grpcio
-Requires-Dist: protobuf
+Requires-Dist: grpcio>=1.84.0
+Requires-Dist: protobuf<8,>=7.35.1
 Requires-Dist: cryptography
 Requires-Dist: dictdiffer
 Dynamic: author
@@ -38,6 +39,7 @@ Dynamic: keywords
 Dynamic: license
 Dynamic: license-file
 Dynamic: requires-dist
+Dynamic: requires-python
 Dynamic: summary
 
 ==========================
@@ -127,6 +129,14 @@ Contributors
 =======
 Dev Log
 =======
+
+Release **0.9.0**:
+
+- **Important**: potentially breaking change. Spec is rebuilt and updated to support gNMI of version ``0.10.0``, generated from `openconfig/gnmi v0.14.1 <https://github.com/openconfig/gnmi/tree/v0.14.1/proto>`_. The generated code requires ``protobuf>=7.35.1,<8`` and ``grpcio>=1.84.0``, and therefore Python 3.10 or later.
+- Added ``scripts/regen_protos.sh`` to regenerate the bundled spec from an ``openconfig/gnmi`` release.
+- Implemented `Commit Confirmed Extension <https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-commit-confirmed.md>`_ for ``set()``. Pass ``extension={"commit": {"id": "c1", "commit": {"rollback_duration": 60}}}`` to start a commit, then ``confirm``, ``cancel`` or ``set_rollback_duration`` with the same ``id``. Rollback duration is seconds as ``int`` or ``float``, or a ``datetime.timedelta``.
+- Deprecated aliases, which are removed from the gNMI specification. ``use_aliases: False`` in a subscription is ignored with a ``DeprecationWarning``; ``use_aliases: True`` and the ``aliases`` argument of ``subscribe()`` raise ``ValueError``. The ``alias`` key of a notification is always ``None``.
+- Moved ``setup.py`` from ``distutils``, which is removed in Python 3.12, to ``setuptools``.
 
 Release **0.8.15**:
 
