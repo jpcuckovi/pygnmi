@@ -13,11 +13,12 @@ import struct
 import time
 import threading
 import os
+import warnings
 from typing import Any
 import cryptography
 import grpc
-from pygnmi.spec.v080.gnmi_pb2_grpc import gNMIStub
-from pygnmi.spec.v080.gnmi_pb2 import (
+from pygnmi.spec.v0100.gnmi_pb2_grpc import gNMIStub
+from pygnmi.spec.v0100.gnmi_pb2 import (
     CapabilityRequest,
     Encoding,
     GetRequest,
@@ -29,7 +30,6 @@ from pygnmi.spec.v080.gnmi_pb2 import (
     Poll,
     SubscriptionList,
     SubscriptionMode,
-    AliasList,
     UpdateResult,
 )
 
@@ -51,6 +51,10 @@ from pygnmi.tools import diff_openconfig
 # Logger
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler(sys.stdout))
+
+# Aliases were removed from the gNMI specification, and the bundled spec has no
+# messages or fields to carry them.
+ALIASES_REMOVED = "gNMI aliases were removed from the gNMI specification and are no longer supported."
 
 
 # Classes
@@ -519,12 +523,9 @@ class gNMIclient(object):
                             else notification_container.update({"prefix": None})
                         )
 
-                        # Message Notification, Key alias
-                        (
-                            notification_container.update({"alias": notification.alias})
-                            if notification.alias
-                            else notification_container.update({"alias": None})
-                        )
+                        # Message Notification, Key alias. Kept as None so the result keeps its shape;
+                        # the field no longer exists in the gNMI specification.
+                        notification_container.update({"alias": None})
 
                         # Message Notification, Key target
                         notification_container.update(
@@ -856,12 +857,16 @@ class gNMIclient(object):
 
         gnmi_extension = get_gnmi_extension(ext=extension)
 
-        # use_alias
-        if "use_aliases" not in subscribe:
-            subscribe.update({"use_aliases": False})
+        # use_aliases is deprecated: accepted as False for compatibility, rejected as True
+        if "use_aliases" in subscribe:
+            if subscribe["use_aliases"]:
+                raise ValueError(ALIASES_REMOVED)
 
-        if not isinstance(subscribe["use_aliases"], bool):
-            raise ValueError("Subsricbe use_aliases should have boolean type.")
+            warnings.warn(
+                f"Subscribe use_aliases is deprecated and ignored. {ALIASES_REMOVED}",
+                DeprecationWarning,
+                stacklevel=3,
+            )
 
         # mode
         if "mode" not in subscribe:
@@ -927,7 +932,6 @@ class gNMIclient(object):
         # Create message for eveyrhting besides subscriptions
         request = SubscriptionList(
             prefix=gnmi_path_generator(subscribe["prefix"], target),
-            use_aliases=subscribe["use_aliases"],
             qos=subscribe["qos"],
             mode=subscribe_mode,
             allow_aggregation=subscribe["allow_aggregation"],
@@ -1010,20 +1014,7 @@ class gNMIclient(object):
                 logger.error("Subscribe pool request is specificed, but the value is not boolean.")
 
         if aliases:
-            if isinstance(aliases, list):
-                request = AliasList()
-                for ae in aliases:
-                    if isinstance(ae, tuple):
-                        if re.match("^#.*", ae[1]):
-                            request.alias.add(path=gnmi_path_generator(ae[0]), alias=ae[1])
-
-                    else:
-                        raise ValueError("The alias is malformed. It should start with #...")
-
-                gnmi_message_request = SubscribeRequest(aliases=request)
-
-            else:
-                logger.error("Subscribe aliases request is specified, but the value is not list.")
+            raise ValueError(ALIASES_REMOVED)
 
         if subscribe:
             gnmi_message_request = self._build_subscriptionrequest(subscribe)

@@ -22,7 +22,6 @@ for host_entry in hosts:
                     'sample_interval': 10000000000
                 }
             ],
-            'use_aliases': False,
             'mode': 'stream',
             'encoding': 'json'
         }

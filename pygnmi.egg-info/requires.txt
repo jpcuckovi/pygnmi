@@ -1,4 +1,4 @@
-grpcio
-protobuf
+grpcio>=1.84.0
+protobuf<8,>=7.35.1
 cryptography
 dictdiffer

@@ -154,7 +154,6 @@ arista_subscribe = {
             'sample_interval': 10000000000
         }
     ],
-    'use_aliases': False,
     'mode': 'stream',
     'encoding': 'proto'
 }

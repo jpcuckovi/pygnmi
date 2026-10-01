@@ -17,7 +17,6 @@ subscribe = {
                         'sample_interval': 10000000000
                     }
                 ],
-                'use_aliases': False,
                 'mode': 'once',
                 'encoding': 'proto'
             }

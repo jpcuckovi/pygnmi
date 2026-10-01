@@ -13,6 +13,9 @@ pygnmi.egg-info/dependency_links.txt
 pygnmi.egg-info/requires.txt
 pygnmi.egg-info/top_level.txt
 pygnmi/artefacts/messages.py
+pygnmi/spec/v0100/gnmi_ext_pb2.py
+pygnmi/spec/v0100/gnmi_pb2.py
+pygnmi/spec/v0100/gnmi_pb2_grpc.py
 pygnmi/spec/v080/gnmi_ext_pb2.py
 pygnmi/spec/v080/gnmi_pb2.py
 pygnmi/spec/v080/gnmi_pb2_grpc.py
@@ -27,3 +30,4 @@ tests/test_06_compare_diff.py
 tests/test_07_certificate_download.py
 tests/test_08_test_cipher_change.py
 tests/test_09_authentication.py
+tests/test_10_deprecated_aliases.py
