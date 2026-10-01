@@ -4,7 +4,7 @@ Collection of unit tests to test generation of XPath
 import pytest
 
 from pygnmi.create_gnmi_path import gnmi_path_generator
-from pygnmi.spec.v080.gnmi_pb2 import Path, PathElem
+from pygnmi.spec.v0100.gnmi_pb2 import Path, PathElem
 
 
 def compare_paths(actual: Path, expected: Path):

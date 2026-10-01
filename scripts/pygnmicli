@@ -92,7 +92,6 @@ def main():
             subscription_list = [{"path": xpath, "mode": "target_defined"} for xpath in args.gnmi_path]
             subscribe = {
                 "subscription": subscription_list,
-                "use_aliases": False,
                 "mode": mode,
                 "encoding": args.encoding,
             }

@@ -21,7 +21,6 @@ test_telemetry_dict = {
             "heartbeat_interval": 30000000000,
         }
     ],
-    "use_aliases": False,
     "mode": "stream",
 }
 
@@ -35,7 +34,6 @@ test_telemetry_dict_once = {
         }
     ],
     "qos": {"marking": 32},
-    "use_aliases": False,
     "mode": "once",
     "encoding": "json",
 }

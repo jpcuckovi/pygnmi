@@ -3,7 +3,7 @@
 
 # Modules
 import datetime
-from pygnmi.spec.v080.gnmi_ext_pb2 import Extension
+from pygnmi.spec.v0100.gnmi_ext_pb2 import Extension
 
 
 # Functions

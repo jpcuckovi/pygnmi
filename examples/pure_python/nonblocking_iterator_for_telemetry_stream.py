@@ -242,7 +242,6 @@ if __name__ == "__main__":
                                     "mode": "target_defined"
                                     }
                                 ],
-                                "use_aliases": False,
                                 "mode": "once",
                                 "encoding": "json"
                                 }
