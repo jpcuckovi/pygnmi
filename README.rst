@@ -12,6 +12,25 @@ pyGNMI: Python gNMI client
 
 This repository contains pure Python implementation of the gNMI client to interact with the network functions.
 
+===============
+About this fork
+===============
+
+This is a maintained fork of `akarneliuk/pygnmi <https://github.com/akarneliuk/pygnmi>`_, which has had no release since 0.8.15 in March 2025. It is not affiliated with the original project, whose BSD 3-Clause license and copyright notices are retained. The badges above describe the original project's PyPI release.
+
+Release **0.9.0** adds:
+
+- The bundled spec rebuilt for gNMI ``0.10.0``, generated from `openconfig/gnmi v0.14.1 <https://github.com/openconfig/gnmi/tree/v0.14.1/proto>`_, with ``scripts/regen_protos.sh`` to regenerate it from any release.
+- The `Commit Confirmed Extension <https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-commit-confirmed.md>`_ for ``set()``, tested against Nokia SR Linux 26.7.2: an unconfirmed commit is reverted by the device when its rollback duration expires, and a confirmed one is kept.
+
+It is a breaking release: it requires Python 3.10 or later, ``protobuf>=7.35.1,<8`` and ``grpcio>=1.84.0``, and gNMI aliases are deprecated because the specification removed them. The Dev Log entry for 0.9.0 below has the details.
+
+It is not published to PyPI, where the ``pygnmi`` name belongs to the original project. Install it from this repository by tag:
+
+.. code-block:: bash
+
+  pip install "pygnmi @ git+https://github.com/jpcuckovi/pygnmi@v0.9.0"
+
 =====
 Usage
 =====
