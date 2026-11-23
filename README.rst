@@ -18,18 +18,26 @@ About this fork
 
 This is a maintained fork of `akarneliuk/pygnmi <https://github.com/akarneliuk/pygnmi>`_, which has had no release since 0.8.15 in March 2025. It is not affiliated with the original project, whose BSD 3-Clause license and copyright notices are retained. The badges above describe the original project's PyPI release.
 
-Release **0.9.0** adds:
-
-- The bundled spec rebuilt for gNMI ``0.10.0``, generated from `openconfig/gnmi v0.14.1 <https://github.com/openconfig/gnmi/tree/v0.14.1/proto>`_, with ``scripts/regen_protos.sh`` to regenerate it from any release.
-- The `Commit Confirmed Extension <https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-commit-confirmed.md>`_ for ``set()``, tested against Nokia SR Linux 26.7.2: an unconfirmed commit is reverted by the device when its rollback duration expires, and a confirmed one is kept.
-
-It is a breaking release: it requires Python 3.10 or later, ``protobuf>=7.35.1,<8`` and ``grpcio>=1.84.0``, and gNMI aliases are deprecated because the specification removed them. The Dev Log entry for 0.9.0 below has the details.
-
-It is not published to PyPI, where the ``pygnmi`` name belongs to the original project. Install it from this repository by tag:
+It is published to PyPI as ``pygnmi-ng``, because the ``pygnmi`` name there belongs to the original project. The import name is unchanged, so existing code works as before:
 
 .. code-block:: bash
 
-  pip install "pygnmi @ git+https://github.com/jpcuckovi/pygnmi@v0.9.0"
+  pip install pygnmi-ng
+
+.. code-block:: python3
+
+  from pygnmi.client import gNMIclient
+
+Install either ``pygnmi`` or ``pygnmi-ng``, not both: they provide the same ``pygnmi`` package.
+
+Since the original project, the fork has added:
+
+- The bundled spec rebuilt for gNMI ``0.10.0`` (release 0.9.0), with ``scripts/regen_protos.sh`` to regenerate it from any ``openconfig/gnmi`` release.
+- The `Commit Confirmed Extension <https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-commit-confirmed.md>`_ for ``set()`` (release 0.9.0), tested against Nokia SR Linux 26.7.2.
+- ``union_replace`` for ``set()`` (release 0.10.0), the gNMI ``0.10.0`` operation that replaces the union of several paths in one transaction.
+- A test suite that runs without a network device, against an in-process gNMI target, in CI on every supported Python version.
+
+The Dev Log below has the details of each release.
 
 =====
 Usage
@@ -104,6 +112,21 @@ Contributors
 =======
 Dev Log
 =======
+
+Release **0.10.0**:
+
+- First release on PyPI, as ``pygnmi-ng``. The import name is still ``pygnmi``. Packaging moved from ``setup.py`` to ``pyproject.toml``.
+- Added ``union_replace`` to ``set()`` and ``set_with_retry()``, with the same list-of-tuples format as ``replace``, and ``set-union_replace`` to ``pygnmicli``. A ``SetResponse`` operation of ``UNION_REPLACE`` is now reported as such instead of ``UNDEFINED``.
+- **Behaviour change**: the library no longer prints its log records to stdout. It adds only a ``logging.NullHandler``, so output is up to the application, for example ``logging.basicConfig(level=logging.INFO)``. ``pygnmicli`` configures logging itself and is unaffected.
+- ``set_with_retry()`` now accepts ``prefix``, ``target`` and ``extension`` (including commit confirmed), which it previously could not pass on, and uses them on both attempts. Its retry warning now shows the delay.
+- Fixed streamed telemetry updates with a timestamp of ``0`` being parsed as ``None``.
+- Fixed leaf-list values (``leaflist_val``) of scalars such as strings: ``get()`` raised and telemetry parsed them as ``None``. They are now a list of decoded values, for example ``["a.example", "b.example"]``. A leaf-list whose elements are all JSON objects keeps its earlier shape, the objects merged into one dict.
+- Fixed ``connect()`` raising ``TypeError`` when ``capabilities()`` fails for a reason other than a gRPC error. It now keeps the default encoding and logs a warning.
+- ``subscribe()`` raises ``ValueError`` for a non-boolean ``poll`` and ``gNMIException`` when given neither ``subscribe`` nor ``poll``, instead of failing with ``UnboundLocalError``.
+- Insecure channels no longer pass the username and password as gRPC channel options. They are sent only as call metadata, as on secure channels.
+- gRPC errors are caught through the public ``grpc.RpcError`` instead of grpcio's private classes, which change between grpcio releases.
+- Tests run without a device against an in-process gNMI target. The device tests still run when ``PYGNMI_HOST`` and the other ``PYGNMI_*`` variables are set, and skip otherwise.
+- Removed the unused gNMI ``0.7.0`` and ``0.8.0`` spec modules and the build artefacts that were committed to the repository.
 
 Release **0.9.0**:
 

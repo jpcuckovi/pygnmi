@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# Published as pygnmi-ng because "pygnmi" on PyPI belongs to the original
+# project. The import name stays pygnmi, so existing code needs no change.
+name = "pygnmi-ng"
+dynamic = ["version"]
+description = "Pure Python gNMI client to manage network functions and collect telemetry. Maintained successor to pygnmi."
+readme = {file = "README.rst", content-type = "text/x-rst"}
+license = "BSD-3-Clause"
+license-files = ["LICENSE.txt"]
+authors = [{name = "Anton Karneliuk", email = "anton@karneliuk.com"}]
+maintainers = [{name = "John Cuckovich", email = "65630812+jpcuckovi@users.noreply.github.com"}]
+requires-python = ">=3.10"
+dependencies = [
+    "grpcio>=1.84.0",
+    "protobuf>=7.35.1,<8",
+    "cryptography",
+    "dictdiffer",
+]
+keywords = ["gnmi", "automation", "grpc", "network", "telemetry", "openconfig"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Telecommunications Industry",
+    "Operating System :: OS Independent",
+    "Topic :: System :: Networking",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+
+[project.optional-dependencies]
+# grpcio-tools regenerates the bundled spec (scripts/regen_protos.sh)
+dev = ["pytest", "coverage", "pylint", "flake8", "grpcio-tools"]
+
+[project.urls]
+Homepage = "https://github.com/jpcuckovi/pygnmi"
+Source = "https://github.com/jpcuckovi/pygnmi"
+Issues = "https://github.com/jpcuckovi/pygnmi/issues"
+Original = "https://github.com/akarneliuk/pygnmi"
+
+[tool.setuptools]
+packages = ["pygnmi", "pygnmi.spec.v0100", "pygnmi.artefacts"]
+script-files = ["scripts/pygnmicli"]
+
+[tool.setuptools.dynamic]
+version = {attr = "pygnmi.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
