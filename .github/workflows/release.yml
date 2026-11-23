@@ -1,0 +1,56 @@
+name: Release
+
+# Publishes to PyPI as pygnmi-ng when a version tag is pushed. Trusted
+# publishing: PyPI trusts this workflow in this repository, so no API token is
+# stored anywhere.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      # A tag that disagrees with the package version would publish the wrong
+      # number, and PyPI versions cannot be reused.
+      - name: Check the tag matches the version
+        run: |
+          version="$(python -c 'import re; print(re.search(r"__version__ = \"(.+)\"", open("pygnmi/__init__.py").read()).group(1))')"
+          test "v${version}" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} != version ${version}"; exit 1; }
+
+      - name: Build
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          twine check --strict dist/*
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/pygnmi-ng/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@v1.14.3

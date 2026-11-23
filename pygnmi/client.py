@@ -5,7 +5,6 @@ pyGNMI module to manage network devices with gNMI
 
 # Modules
 import re
-import sys
 import json
 import logging
 import queue
@@ -48,13 +47,17 @@ from pygnmi.create_gnmi_extension import get_gnmi_extension
 from pygnmi.tools import diff_openconfig
 
 
-# Logger
+# Logger. A library only adds a NullHandler: where log records go, and at what
+# level, is the application's decision (pygnmicli configures its own).
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.StreamHandler(sys.stdout))
+logger.addHandler(logging.NullHandler())
 
 # Aliases were removed from the gNMI specification, and the bundled spec has no
 # messages or fields to carry them.
 ALIASES_REMOVED = "gNMI aliases were removed from the gNMI specification and are no longer supported."
+
+# UpdateResult.Operation values as set() reports them. Anything else reads "UNDEFINED".
+SET_RESPONSE_OPS = {1: "DELETE", 2: "REPLACE", 3: "UPDATE", 4: "UNION_REPLACE"}
 
 
 # Classes
@@ -159,7 +162,8 @@ class gNMIclient(object):
             debug_gnmi_msg(self.__debug, self.__target_path, "GRPC Target")
             debug_gnmi_msg(self.__debug, self.__options, "GRPC Channel options")
 
-            self.__channel = grpc.insecure_channel(self.__target_path, self.__metadata + self.__options)
+            # Credentials travel as per-call metadata; they are not channel options
+            self.__channel = grpc.insecure_channel(self.__target_path, self.__options)
 
         # Secure GRPC channel
         else:
@@ -302,7 +306,7 @@ class gNMIclient(object):
         self.__stub = gNMIStub(self.__channel)
 
         caps = self.capabilities()
-        if "supported_encodings" in caps:
+        if caps and "supported_encodings" in caps:
             self.__supported_encodings = caps["supported_encodings"]
             # Automatically pick encoding, in order of prefence
             for p in ["json", "json_ietf", "bytes", "proto", "ascii"]:
@@ -389,7 +393,7 @@ class gNMIclient(object):
 
             return response
 
-        except grpc._channel._InactiveRpcError as err:
+        except grpc.RpcError as err:
             logger.critical(f"GRPC ERROR Host: {self.__target_path}, Error: {err.details()}")
             raise gNMIException(f"GRPC ERROR Host: {self.__target_path}, Error: {err.details()}", err)
 
@@ -589,25 +593,7 @@ class gNMIclient(object):
                                         update_container.update({"val": update_msg.val.proto_bytes})
 
                                     elif update_msg.val.HasField("leaflist_val"):
-                                        val_leaflist = update_msg.val
-                                        element_val = None
-                                        if all([isinstance(e, TypedValue) for e in val_leaflist.leaflist_val.element]):
-                                            element_val = {}
-                                            for e in val_leaflist.leaflist_val.element:
-                                                if hasattr(e, "json_val"):
-                                                    element_val.update(json.loads(e.json_val))
-                                                elif hasattr(e, "json_ietf_val"):
-                                                    element_val.update(json.loads(e.json_ietf_val))
-                                                else:
-                                                    raise TypeError(f"Neither json_val nor json_ietf_val found in element {e}.")
-                                        elif all([isinstance(e, str) for e in val_leaflist.leaflist_val.element]):
-                                            element_val = ""
-                                            for e in val_leaflist.leaflist_val.element:
-                                                element_val += e
-                                        else:
-                                            raise Exception("leaflist elements have differing types. Only str and TypedValue are supported.")
-
-                                        update_container.update({"val": element_val})
+                                        update_container.update({"val": decode_leaflist(update_msg.val.leaflist_val)})
 
                                 notification_container["update"].append(update_container)
 
@@ -615,7 +601,7 @@ class gNMIclient(object):
 
             return response
 
-        except grpc._channel._InactiveRpcError as err:
+        except grpc.RpcError as err:
             logger.critical(f"GRPC ERROR Host: {self.__target_path}, Error: {err.details()}")
             raise gNMIException(f"GRPC ERROR Host: {self.__target_path}, Error: {err.details()}", err)
 
@@ -632,6 +618,7 @@ class gNMIclient(object):
         prefix: str = None,
         target: str = None,
         extension: dict = None,
+        union_replace: list = None,
     ):
         """
         Changing the configuration on the destination network elements.
@@ -648,6 +635,11 @@ class gNMIclient(object):
           - list of tuples where the first entry path provided as a string, and the second entry
             is a dictionary with the configuration to be configured
 
+        union_replace:
+          - list of tuples in the same format as replace. gNMI 0.10.0: the target replaces the
+            union of the given paths, typically used to send OpenConfig and CLI configuration
+            for one device in a single transaction. The target must support it.
+
         The encoding argument may have the following values per gNMI specification:
           - json
           - bytes
@@ -658,6 +650,7 @@ class gNMIclient(object):
         del_protobuf_paths = []
         replace_msg = []
         update_msg = []
+        union_replace_msg = []
         diff_list = []
 
         # Set the encoding to auto-discovered value, unless overridden
@@ -693,6 +686,10 @@ class gNMIclient(object):
         if update:
             update_msg = construct_update_message(user_list=update, encoding=encoding)
 
+        # Union replace operation
+        if union_replace:
+            union_replace_msg = construct_update_message(user_list=union_replace, encoding=encoding)
+
         try:
             # Adding collection of data for diff before the change
             if self.__show_diff:
@@ -704,6 +701,8 @@ class gNMIclient(object):
                     paths_to_collect_list.extend([path_tuple[0] for path_tuple in update])
                 if replace:
                     paths_to_collect_list.extend([path_tuple[0] for path_tuple in replace])
+                if union_replace:
+                    paths_to_collect_list.extend([path_tuple[0] for path_tuple in union_replace])
 
                 pre_change_dict = self.get(
                     prefix=prefix,
@@ -712,36 +711,18 @@ class gNMIclient(object):
                     datatype="config",
                 )
 
+            request_fields = {
+                "delete": del_protobuf_paths,
+                "update": update_msg,
+                "replace": replace_msg,
+                "union_replace": union_replace_msg,
+            }
+            # The prefix is only sent when one was asked for, as before
+            if prefix is not None or target is not None:
+                request_fields["prefix"] = protobuf_prefix
             if gnmi_extension:
-                if prefix is None and target is None:
-                    gnmi_message_request = SetRequest(
-                        delete=del_protobuf_paths,
-                        update=update_msg,
-                        replace=replace_msg,
-                        extension=[gnmi_extension],
-                    )
-                else:
-                    gnmi_message_request = SetRequest(
-                        prefix=protobuf_prefix,
-                        delete=del_protobuf_paths,
-                        update=update_msg,
-                        replace=replace_msg,
-                        extension=[gnmi_extension],
-                    )
-            else:
-                if prefix is None and target is None:
-                    gnmi_message_request = SetRequest(
-                        delete=del_protobuf_paths,
-                        update=update_msg,
-                        replace=replace_msg,
-                    )
-                else:
-                    gnmi_message_request = SetRequest(
-                        prefix=protobuf_prefix,
-                        delete=del_protobuf_paths,
-                        update=update_msg,
-                        replace=replace_msg,
-                    )
+                request_fields["extension"] = [gnmi_extension]
+            gnmi_message_request = SetRequest(**request_fields)
             debug_gnmi_msg(self.__debug, gnmi_message_request, "gNMI request")
 
             gnmi_message_response = self.__stub.Set(gnmi_message_request, metadata=self.__metadata)
@@ -784,15 +765,7 @@ class gNMIclient(object):
 
                         ## Message UpdateResult, Key op
                         if response_entry.op:
-                            if response_entry.op == 1:
-                                res_op = "DELETE"
-                            elif response_entry.op == 2:
-                                res_op = "REPLACE"
-                            elif response_entry.op == 3:
-                                res_op = "UPDATE"
-                            else:
-                                res_op = "UNDEFINED"
-
+                            res_op = SET_RESPONSE_OPS.get(response_entry.op, "UNDEFINED")
                             response_container.update({"op": res_op})
 
                         response["response"].append(response_container)
@@ -819,7 +792,7 @@ class gNMIclient(object):
                 logger.error("Failed parsing the SetResponse.")
                 return None
 
-        except grpc._channel._InactiveRpcError as err:
+        except grpc.RpcError as err:
             logger.critical(f"GRPC ERROR Host: {self.__target_path}, Error: {err.details()}")
             raise gNMIException(f"GRPC ERROR Host: {self.__target_path}, Error: {err.details()}", err)
         except Exception as e:
@@ -833,21 +806,35 @@ class gNMIclient(object):
         update: list = None,
         encoding: str = None,
         retry_delay: int = 3,
+        prefix: str = None,
+        target: str = None,
+        extension: dict = None,
+        union_replace: list = None,
     ):
         """
         Performs a set and retries (once) after a temporary failure with StatusCode.FAILED_PRECONDITION
         """
+        set_args = {
+            "delete": delete,
+            "replace": replace,
+            "update": update,
+            "encoding": encoding,
+            "prefix": prefix,
+            "target": target,
+            "extension": extension,
+            "union_replace": union_replace,
+        }
         try:
-            return self.set(delete=delete, replace=replace, update=update, encoding=encoding)
+            return self.set(**set_args)
         except gNMIException as e:
             grpc_error = e.orig_exc
-            if isinstance(grpc_error, grpc._channel._InactiveRpcError):
+            if isinstance(grpc_error, grpc.RpcError):
                 # May happen e.g. during system startup or due to lock contention, retry once
                 if grpc_error.code() == grpc.StatusCode.FAILED_PRECONDITION:
-                    logger.warning("FAILED_PRECONDITION exception during set, retrying in {retry_delay}s...")
+                    logger.warning(f"FAILED_PRECONDITION exception during set, retrying in {retry_delay}s...")
                     time.sleep(retry_delay)
 
-                    return self.set(delete=delete, replace=replace, update=update, encoding=encoding)
+                    return self.set(**set_args)
 
             raise
 
@@ -1011,7 +998,7 @@ class gNMIclient(object):
                     gnmi_message_request = SubscribeRequest(poll=request)
 
             else:
-                logger.error("Subscribe pool request is specificed, but the value is not boolean.")
+                raise ValueError("Subscribe poll request is specified, but the value is not boolean.")
 
         if aliases:
             raise ValueError(ALIASES_REMOVED)
@@ -1019,6 +1006,9 @@ class gNMIclient(object):
         if subscribe:
             gnmi_message_request = self._build_subscriptionrequest(subscribe)
             debug_gnmi_msg(self.__debug, gnmi_message_request, "gNMI request")
+
+        if not (subscribe or poll):
+            raise gNMIException("Subscribe request needs either subscribe or poll.")
 
         return self.__stub.Subscribe(self.__generator(gnmi_message_request), metadata=self.__metadata, timeout=timeout)
 
@@ -1130,7 +1120,7 @@ class _Subscriber:
                 
                 # The connection was terminated by the server. This is generally okay and
                 # shouldn't raise an exception.
-                if isinstance(error, grpc._channel._MultiThreadedRendezvous) and error.code() == grpc.StatusCode.CANCELLED:
+                if isinstance(error, grpc.RpcError) and error.code() == grpc.StatusCode.CANCELLED:
                     return
                 
                 raise error
@@ -1332,7 +1322,7 @@ def telemetryParser(in_message=None, debug: bool = False):
             (
                 response["update"].update({"timestamp": in_message.update.timestamp})
                 if in_message.update.timestamp
-                else in_message.update({"timestamp": 0})
+                else response["update"].update({"timestamp": 0})
             )
 
             if in_message.update.HasField("prefix"):
@@ -1404,25 +1394,7 @@ def telemetryParser(in_message=None, debug: bool = False):
                         update_container.update({"val": val_decimal})
 
                     elif update_msg.val.HasField("leaflist_val"):
-                        val_leaflist = update_msg.val
-                        element_val = None
-                        if all([isinstance(e, TypedValue) for e in val_leaflist.leaflist_val.element]):
-                            element_val = {}
-                            for e in val_leaflist.leaflist_val.element:
-                                if hasattr(e, "json_val"):
-                                    element_val.update(json.loads(e.json_val))
-                                elif hasattr(e, "json_ietf_val"):
-                                    element_val.update(json.loads(e.json_ietf_val))
-                                else:
-                                    raise TypeError(f"Neither json_val nor json_ietf_val found in element {e}.")
-                        elif all([isinstance(e, str) for e in val_leaflist.leaflist_val.element]):
-                            element_val = ""
-                            for e in val_leaflist.leaflist_val.element:
-                                element_val += e
-                        else:
-                            raise Exception("leaflist elements have differing types. Only str and TypedValue are supported.")
-
-                        update_container.update({"val": element_val})
+                        update_container.update({"val": decode_leaflist(update_msg.val.leaflist_val)})
 
                 response["update"]["update"].append(update_container)
 
@@ -1488,6 +1460,34 @@ def process_potentially_json_value(input_val) -> Any:
         processed_val = None
 
     return processed_val
+
+
+def decode_scalar(typed_value) -> Any:
+    """Decode one scalar TypedValue, such as an element of a leaf-list."""
+    kind = typed_value.WhichOneof("value")
+    if kind is None:
+        return None
+    value = getattr(typed_value, kind)
+    if kind in ("json_val", "json_ietf_val"):
+        return process_potentially_json_value(value)
+    return value
+
+
+def decode_leaflist(scalar_array) -> Any:
+    """Decode a leaflist_val (ScalarArray) into a list of its decoded elements.
+
+    For compatibility with earlier releases, an array whose elements are all JSON
+    objects is still returned as those objects merged into one dict.
+    """
+    elements = list(scalar_array.element)
+    decoded = [decode_scalar(e) for e in elements]
+    is_json = all(e.WhichOneof("value") in ("json_val", "json_ietf_val") for e in elements)
+    if elements and is_json and all(isinstance(d, dict) for d in decoded):
+        merged = {}
+        for d in decoded:
+            merged.update(d)
+        return merged
+    return decoded
 
 
 def construct_update_message(user_list: list, encoding: str) -> list:

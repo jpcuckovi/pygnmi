@@ -1,7 +1,0 @@
-grpcio
-grpcio-tools
-twine
-pytest
-coverage
-dictdiffer
-pylint

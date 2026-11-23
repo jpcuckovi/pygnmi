@@ -1,8 +1,0 @@
-grpcio
-twine
-pytest
-coverage
-dictdiffer
-pylint
-flake8
-protobufgrpcio-tools

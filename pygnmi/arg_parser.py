@@ -94,6 +94,7 @@ def parse_args(msg):
             "get",
             "set-update",
             "set-replace",
+            "set-union_replace",
             "set-delete",
             "subscribe-stream",
             "subscribe-poll",
@@ -215,7 +216,7 @@ def parse_args(msg):
     except ValueError:
         parser.error(msg["wrong_data"])
 
-    if args.operation in ("set-update", "set-replace"):
+    if args.operation in ("set-update", "set-replace", "set-union_replace"):
         if args.file is None:
             parser.error(f"--file is required when doing a {args.operation} operation")
         if len(args.gnmi_path) > 1:

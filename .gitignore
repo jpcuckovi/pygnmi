@@ -12,3 +12,5 @@ log/
 dist/
 pygnmi_dev.py
 pcl
+*.egg-info/
+build/
