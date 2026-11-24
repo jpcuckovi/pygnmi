@@ -4,7 +4,7 @@
 from pygnmi.client import gNMIclient
 import json
 
-host = ('10.127.60.177', '57400')
+host = ('192.0.2.1', '57400')
 
 if __name__ == '__main__':
     # The override should match a SAN in the server side certificate.

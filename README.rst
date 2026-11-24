@@ -2,13 +2,13 @@
 pyGNMI: Python gNMI client
 ==========================
 
-.. image:: https://github.com/akarneliuk/pygnmi/blob/master/logo.png
+.. image:: logo.png
    :width: 300
    :height: 300
    :alt: pyGNMI logo
    :align: center
 
-|project|_ |version|_ |coverage|_ |tag|_ |license|_
+|ci|_ |license|_
 
 This repository contains pure Python implementation of the gNMI client to interact with the network functions.
 
@@ -16,28 +16,48 @@ This repository contains pure Python implementation of the gNMI client to intera
 About this fork
 ===============
 
-This is a maintained fork of `akarneliuk/pygnmi <https://github.com/akarneliuk/pygnmi>`_, which has had no release since 0.8.15 in March 2025. It is not affiliated with the original project, whose BSD 3-Clause license and copyright notices are retained. The badges above describe the original project's PyPI release.
+This is a maintained fork of `akarneliuk/pygnmi <https://github.com/akarneliuk/pygnmi>`_, which has had no release since 0.8.15 in March 2025. It is not affiliated with the original project, whose BSD 3-Clause license and copyright notices are retained. The logo is the original project's.
 
-It is published to PyPI as ``pygnmi-ng``, because the ``pygnmi`` name there belongs to the original project. The import name is unchanged, so existing code works as before:
+Since the original project, the fork has added:
+
+- The bundled spec rebuilt for gNMI ``0.10.0`` (release 0.9.0), with ``scripts/regen_protos.sh`` to regenerate it from any ``openconfig/gnmi`` release.
+- The `Commit Confirmed Extension <https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-commit-confirmed.md>`_ for ``set()`` (release 0.9.0).
+- ``union_replace`` for ``set()`` (unreleased, 0.10.0), the gNMI ``0.10.0`` operation that replaces the union of several paths in one transaction.
+- A test suite that runs without a network device, against an in-process gNMI target, in CI on every supported Python version.
+
+The Dev Log below has the details of each release.
+
+Installation
+------------
+
+The fork is not on PyPI; the ``pygnmi`` package there is the original project. Install the fork from GitHub, pinned to a release tag:
 
 .. code-block:: bash
 
-  pip install pygnmi-ng
+  pip install "pygnmi @ git+https://github.com/jpcuckovi/pygnmi@v0.9.0"
+
+The import name is unchanged, so existing code works as before:
 
 .. code-block:: python3
 
   from pygnmi.client import gNMIclient
 
-Install either ``pygnmi`` or ``pygnmi-ng``, not both: they provide the same ``pygnmi`` package.
+Installing the fork replaces the original ``pygnmi`` package if it is already installed.
 
-Since the original project, the fork has added:
+Status
+------
 
-- The bundled spec rebuilt for gNMI ``0.10.0`` (release 0.9.0), with ``scripts/regen_protos.sh`` to regenerate it from any ``openconfig/gnmi`` release.
-- The `Commit Confirmed Extension <https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-commit-confirmed.md>`_ for ``set()`` (release 0.9.0), tested against Nokia SR Linux 26.7.2.
-- ``union_replace`` for ``set()`` (release 0.10.0), the gNMI ``0.10.0`` operation that replaces the union of several paths in one transaction.
-- A test suite that runs without a network device, against an in-process gNMI target, in CI on every supported Python version.
+The latest release is 0.9.0. The ``master`` branch holds 0.10.0, which is not released yet. Its distribution name is ``pygnmi-ng``, so installing ``master`` from GitHub needs ``"pygnmi-ng @ git+https://github.com/jpcuckovi/pygnmi"``.
 
-The Dev Log below has the details of each release.
+Tested Network Operating Systems (NOS)
+--------------------------------------
+
+The fork has been validated against:
+
+- Arista cEOS 4.36.2F (``master``, 0.10.0): 35 of the 38 device tests pass, including union_replace, commit confirmed (confirm, rollback on timeout, cancel), leaf-list decoding, TLS with certificate download, and plaintext channels. The three failures are the target's, not the client's: two tests use a YANG module name as the path origin (``openconfig-interfaces:...``), which this EOS release rejects in favour of ``openconfig:``, and one reads ``Management1``, which cEOS names ``Management0``. ``test_08`` (cipher change) was written for Nokia SR OS and does not exercise anything on EOS.
+- Nokia SR Linux 26.7.2 (release 0.9.0, including commit confirmed)
+
+The original project reported testing on Arista EOS, Nokia SR OS, Cisco IOS XR, Juniper JUNOS, Nokia SR Linux and Cisco NX-OS, with Broadcom SONiC in progress. Those results predate the fork and have not been repeated with it.
 
 =====
 Usage
@@ -46,24 +66,49 @@ Sample code example:
 
 .. code-block:: python3
 
-  # Modules
   from pygnmi.client import gNMIclient
 
-  # Variables
-  host = ('169.254.255.64', '57400')
+  host = ("192.0.2.1", "57400")
 
-  # Body
-  if __name__ == '__main__':
-      with gNMIclient(target=host, username='admin', password='admin', insecure=True) as gc:
-           result = gc.get(path=['openconfig-interfaces:interfaces', 'openconfig-acl:acl'])
+  if __name__ == "__main__":
+      with gNMIclient(target=host, username="admin", password="admin", insecure=True) as gc:
+          result = gc.get(path=["openconfig-interfaces:interfaces", "openconfig-acl:acl"])
 
       print(result)
 
 Also integration with Nornir is supported (`refer to examples <examples/nornir>`_).
 
+Commit confirmed
+----------------
+
+``set()`` takes the `Commit Confirmed Extension <https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-commit-confirmed.md>`_ as ``extension={"commit": {...}}``, with an ``id`` and exactly one action. The target rolls the change back unless it is confirmed within the rollback duration:
+
+.. code-block:: python3
+
+  gc.set(
+      update=[("/system/config", {"hostname": "leaf1"})],
+      extension={"commit": {"id": "change-42", "commit": {"rollback_duration": 300}}},
+  )
+
+  gc.set(extension={"commit": {"id": "change-42", "confirm": {}}})
+
+``cancel`` rolls the change back at once, and ``set_rollback_duration`` changes the duration of a pending commit. The rollback duration is seconds as ``int`` or ``float``, or a ``datetime.timedelta``.
+
+Union replace
+-------------
+
+``union_replace`` (unreleased, 0.10.0) takes the same list of tuples as ``replace``. It is meant to carry a device's complete configuration, and a target may replace everything it holds with exactly what is sent. On Arista EOS, which needs ``operation set namespace`` under ``management api gnmi`` before it accepts union_replace, a fragment removes the rest of the configuration, users and gNMI transports included. Send the whole configuration, for example the running config through the CLI origin with the intended change applied:
+
+.. code-block:: python3
+
+  running = gc.get(path=["cli:show running-config"], encoding="ascii")["notification"][0]["update"][0]["val"]
+  gc.set(union_replace=[("cli://", updated_config)], encoding="ascii")
+
+``set()`` applies one encoding to every value in a request, so a single union_replace cannot yet mix OpenConfig JSON and CLI text.
+
 Video tutorial
 --------------
-Watch the detailed explanation how to use pyGNMI `in our YouTube channel <https://www.youtube.com/watch?v=NooE_uHIgys&list=PLsTgo2tBPnTwmeP9zsd8B_tZR-kbguvla>`_.
+The original project's author explains how to use pyGNMI `on YouTube <https://www.youtube.com/watch?v=NooE_uHIgys&list=PLsTgo2tBPnTwmeP9zsd8B_tZR-kbguvla>`_. The videos predate the fork.
 
 
 All gNMI RPCs supported
@@ -77,19 +122,6 @@ Supported operation modes
 -------------------------
 - insecure gRPC channel (without encryption)
 - secure gRPC channel (with encryption and authentication based on certificate)
-
-Tested Network Operating Systems (NOS)
---------------------------------------
-- Arista EOS
-- Nokia SR OS
-- Cisco IOS XR
-- Juniper JUNOS
-- Nokia SRLinux
-- Cisco NX-OS
-
-Network Operating Systems (NOS) in test
----------------------------------------
-- Broadcom SONiC
 
 =======
 License
@@ -113,9 +145,9 @@ Contributors
 Dev Log
 =======
 
-Release **0.10.0**:
+Release **0.10.0** (unreleased, on ``master``; validated against Arista cEOS 4.36.2F):
 
-- First release on PyPI, as ``pygnmi-ng``. The import name is still ``pygnmi``. Packaging moved from ``setup.py`` to ``pyproject.toml``.
+- Packaging moved from ``setup.py`` to ``pyproject.toml``, and the distribution is renamed ``pygnmi-ng`` to tell it apart from the original project. The import name is still ``pygnmi``.
 - Added ``union_replace`` to ``set()`` and ``set_with_retry()``, with the same list-of-tuples format as ``replace``, and ``set-union_replace`` to ``pygnmicli``. A ``SetResponse`` operation of ``UNION_REPLACE`` is now reported as such instead of ``UNDEFINED``.
 - **Behaviour change**: the library no longer prints its log records to stdout. It adds only a ``logging.NullHandler``, so output is up to the application, for example ``logging.basicConfig(level=logging.INFO)``. ``pygnmicli`` configures logging itself and is unaffected.
 - ``set_with_retry()`` now accepts ``prefix``, ``target`` and ``extension`` (including commit confirmed), which it previously could not pass on, and uses them on both attempts. Its retry warning now shows the delay.
@@ -125,7 +157,9 @@ Release **0.10.0**:
 - ``subscribe()`` raises ``ValueError`` for a non-boolean ``poll`` and ``gNMIException`` when given neither ``subscribe`` nor ``poll``, instead of failing with ``UnboundLocalError``.
 - Insecure channels no longer pass the username and password as gRPC channel options. They are sent only as call metadata, as on secure channels.
 - gRPC errors are caught through the public ``grpc.RpcError`` instead of grpcio's private classes, which change between grpcio releases.
-- Tests run without a device against an in-process gNMI target. The device tests still run when ``PYGNMI_HOST`` and the other ``PYGNMI_*`` variables are set, and skip otherwise.
+- Fixed the legacy ``subscribe()`` ending every stream with ``DEADLINE_EXCEEDED``: its default ``timeout`` of ``0.0`` was passed to gRPC as a deadline that had already passed. It now means no deadline.
+- Tests run without a device against an in-process gNMI target. The device tests still run when ``PYGNMI_HOST`` and the other ``PYGNMI_*`` variables are set, and skip otherwise. Their paths now use the ``openconfig`` origin, which current Arista EOS requires.
+- Added device tests for the 0.10.0 changes (``tests/test_12_device_0_10.py``) and ``scripts/device-lab.sh``, which runs the whole device suite against a one-switch Arista cEOS lab on a Kubernetes cluster with clabernetes.
 - Removed the unused gNMI ``0.7.0`` and ``0.8.0`` spec modules and the build artefacts that were committed to the repository.
 
 Release **0.9.0**:
@@ -498,13 +532,7 @@ Release **0.1.0**:
 
 (c)2020-2022, karneliuk.com
 
-.. |version| image:: https://img.shields.io/static/v1?label=latest&message=v0.8.15&color=success
-.. _version: https://pypi.org/project/pygnmi/
-.. |tag| image:: https://img.shields.io/static/v1?label=status&message=stable&color=success
-.. _tag: https://pypi.org/project/pygnmi/
+.. |ci| image:: https://github.com/jpcuckovi/pygnmi/actions/workflows/ci.yaml/badge.svg?branch=master
+.. _ci: https://github.com/jpcuckovi/pygnmi/actions/workflows/ci.yaml
 .. |license| image:: https://img.shields.io/static/v1?label=license&message=BSD-3-clause&color=success
-.. _license: https://github.com/akarneliuk/pygnmi/blob/master/LICENSE.txt
-.. |project| image:: https://img.shields.io/badge/akarneliuk%2Fpygnmi-blueviolet.svg?logo=github&color=success
-.. _project: https://github.com/akarneliuk/pygnmi/
-.. |coverage| image:: https://img.shields.io/static/v1?label=coverage&message=68%&color=yellow
-.. _coverage: https://github.com/nedbat/coveragepy
+.. _license: https://github.com/jpcuckovi/pygnmi/blob/master/LICENSE.txt

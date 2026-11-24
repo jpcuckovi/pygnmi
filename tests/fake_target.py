@@ -7,6 +7,7 @@ can assert on exactly what the client sent. A status code set in `errors`
 makes that RPC fail, which is how error handling is exercised.
 """
 
+import time
 from concurrent import futures
 
 import grpc
@@ -40,6 +41,8 @@ class FakeTarget(gNMIServicer):
         self.set_response = SetResponse()
         # Sent after the initial SubscribeRequest, and again after each Poll
         self.subscribe_responses = []
+        # Seconds to wait before the first Subscribe response, as a device does
+        self.subscribe_delay = 0.0
 
     def _record(self, rpc, request, context):
         self.requests[rpc].append(request)
@@ -63,6 +66,7 @@ class FakeTarget(gNMIServicer):
     def Subscribe(self, request_iterator, context):
         first = next(request_iterator)
         self._record("Subscribe", first, context)
+        time.sleep(self.subscribe_delay)
         yield from self.subscribe_responses
 
         if first.subscribe.mode == SubscriptionList.ONCE:

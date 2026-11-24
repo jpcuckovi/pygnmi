@@ -305,6 +305,20 @@ def test_update_with_zero_timestamp_is_not_dropped(client, fake):
     assert received[0]["update"]["update"][0]["val"] == {"in-octets": 10}
 
 
+def test_legacy_subscribe_default_timeout_is_no_deadline(client, fake):
+    """subscribe()'s default timeout of 0.0 once became an expired deadline."""
+    fake.target.subscribe_responses = [_counters({"in-octets": 10}), SubscribeResponse(sync_response=True)]
+    fake.target.subscribe_delay = 0.2
+
+    stream = client.subscribe(subscribe=dict(SUBSCRIPTION, mode="once"))
+    try:
+        first = telemetryParser(next(stream))
+    finally:
+        stream.cancel()
+
+    assert first["update"]["update"][0]["val"] == {"in-octets": 10}
+
+
 def test_subscribe_rejects_a_non_boolean_poll(client):
     with pytest.raises(ValueError):
         client.subscribe(poll="yes")

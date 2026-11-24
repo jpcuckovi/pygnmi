@@ -1,15 +1,18 @@
+# Paths use the "openconfig" origin. Current Arista EOS rejects a YANG module
+# name as the origin ("openconfig-interfaces:..."), which these tests once used.
+
 test_set_update_tuple = (
-    "openconfig-interfaces:interfaces/interface[name=Loopback51]",
+    "openconfig:interfaces/interface[name=Loopback51]",
     {"config": {"name": "Loopback51", "type": "softwareLoopback", "description": "pytest-update-test", "enabled": True}},
 )
 
 test_set_replace_tuple = (
-    "openconfig-interfaces:interfaces/interface[name=Loopback51]/config",
+    "openconfig:interfaces/interface[name=Loopback51]/config",
     {"name": "Loopback51", "type": "softwareLoopback", "description": "pytest-replace-test", "enabled": True},
 )
 
 test_delete_second_str = (
-    "openconfig-network-instance:network-instances/network-instance[name=default]/interfaces/interface[id=Loopback51]"
+    "openconfig:network-instances/network-instance[name=default]/interfaces/interface[id=Loopback51]"
 )
 
 test_telemetry_dict = {
@@ -49,7 +52,7 @@ test_telemetry_dict_poll = {
 }
 
 test_compare_add_tuple = (
-    "openconfig-interfaces:interfaces/interface[name=Loopback51]",
+    "openconfig:interfaces/interface[name=Loopback51]",
     {
         "config": {"name": "Loopback51", "type": "softwareLoopback", "description": "pytest-update-test-22", "enabled": True},
         "subinterfaces": {
@@ -73,10 +76,10 @@ test_compare_add_tuple = (
 )
 
 test_compare_change_tuple = (
-    "openconfig-interfaces:interfaces/interface[name=Loopback51]",
+    "openconfig:interfaces/interface[name=Loopback51]",
     {"config": {"name": "Loopback51", "type": "softwareLoopback", "description": "pytest-update-test-33", "enabled": False}},
 )
 
 test_compare_remove_path = (
-    "openconfig-interfaces:interfaces/interface[name=Loopback51]/subinterfaces/subinterface[index=0]/openconfig-if-ip:ipv4"
+    "openconfig:interfaces/interface[name=Loopback51]/subinterfaces/subinterface[index=0]/openconfig-if-ip:ipv4"
 )

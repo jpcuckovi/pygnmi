@@ -25,6 +25,7 @@ DEVICE_MODULES = {
     "test_07_certificate_download.py",
     "test_08_test_cipher_change.py",
     "test_09_authentication.py",
+    "test_12_device_0_10.py",
 }
 
 

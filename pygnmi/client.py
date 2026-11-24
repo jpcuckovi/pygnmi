@@ -1010,7 +1010,11 @@ class gNMIclient(object):
         if not (subscribe or poll):
             raise gNMIException("Subscribe request needs either subscribe or poll.")
 
-        return self.__stub.Subscribe(self.__generator(gnmi_message_request), metadata=self.__metadata, timeout=timeout)
+        # The default of 0.0 means no deadline. Passed through as-is, gRPC treats
+        # it as a deadline that has already passed and ends every stream at once.
+        return self.__stub.Subscribe(
+            self.__generator(gnmi_message_request), metadata=self.__metadata, timeout=timeout or None
+        )
 
     def subscribe2(self, subscribe: dict, target: str = None, extension: list = None):
         """

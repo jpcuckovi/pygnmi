@@ -3,8 +3,8 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-# Published as pygnmi-ng because "pygnmi" on PyPI belongs to the original
-# project. The import name stays pygnmi, so existing code needs no change.
+# Named pygnmi-ng because "pygnmi" on PyPI belongs to the original project.
+# The import name stays pygnmi, so existing code needs no change.
 name = "pygnmi-ng"
 dynamic = ["version"]
 description = "Pure Python gNMI client to manage network functions and collect telemetry. Maintained successor to pygnmi."
@@ -22,7 +22,7 @@ dependencies = [
 ]
 keywords = ["gnmi", "automation", "grpc", "network", "telemetry", "openconfig"]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
     "Intended Audience :: Telecommunications Industry",

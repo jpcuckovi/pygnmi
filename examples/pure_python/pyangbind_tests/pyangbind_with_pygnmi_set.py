@@ -6,7 +6,7 @@ import json
 from binding import Cisco_IOS_XR_ifmgr_cfg
 import pyangbind.lib.pybindJSON as pybindJSON
 
-host=('10.127.60.177','57400')
+host=('192.0.2.1','57400')
 
 ifmgr=Cisco_IOS_XR_ifmgr_cfg()
 
@@ -20,7 +20,7 @@ data=json.load(fn)
 set_list = [(k, v) for k, v in data.items()]
 
 if __name__ == '__main__':
-    with gNMIclient(target=host, username='test2',password='cisco123', path_cert='/Volumes/avpathak/BossHogg/openconfig/ems_BH_P2A4.pem',override='ems.cisco.com',debug=True) as gc:
+    with gNMIclient(target=host, username='admin',password='admin', path_cert='/path/to/target-cert.pem',override='target.example.net',debug=True) as gc:
         result = gc.set(update=set_list,encoding='json_ietf')
         print(result)
 

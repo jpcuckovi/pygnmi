@@ -1,0 +1,131 @@
+# A one-switch Arista cEOS lab for the device tests, as a clabernetes Topology.
+#
+# scripts/device-lab.sh applies it, substituting __CEOS_IMAGE__ from the
+# CEOS_IMAGE environment variable: cEOS is not publicly pullable, so the image
+# reference is site-specific and is never committed.
+#
+# The switch serves gNMI twice:
+#   6030  TLS, with a self-signed certificate; the script generates it and
+#         configures this transport after boot.
+#         The certificate covers 127.0.0.1 and localhost, because the tests
+#         reach the switch through `kubectl port-forward`.
+#   6031  plaintext, for the insecure-channel tests.
+#
+# host1 is there only so Ethernet1 exists and is up: the subscription tests
+# stream Ethernet1's counters.
+
+apiVersion: c9s.run/v1alpha1
+kind: Topology
+metadata:
+  name: pygnmi
+  namespace: pygnmi-lab
+
+spec:
+  # Nested containers are named after the node, so the script can exec into
+  # `ceos1` rather than `clab-pygnmi-ceos1`.
+  naming: non-prefixed
+  connectivity: vxlan
+
+  expose:
+    # The script owns a port-forward; nothing gets an external address.
+    exposeType: ClusterIP
+    # Only the ports the topology lists, not telnet, FTP and VNC as well.
+    disableAutoExpose: true
+
+  deployment:
+    resources:
+      # cEOS uses about 1.9 GiB at steady state and more while booting.
+      default:
+        requests:
+          memory: 2560Mi
+          cpu: "1"
+        limits:
+          memory: 4Gi
+          cpu: "2"
+      host1:
+        requests:
+          memory: 512Mi
+          cpu: 100m
+        limits:
+          memory: 1Gi
+          cpu: 500m
+    privilegedLauncher: true
+    # Every run starts from the startup config below.
+    persistence:
+      enabled: false
+
+  imagePull:
+    # Pulled through the node's container runtime, which knows the registry.
+    pullThroughOverride: always
+
+  statusProbes:
+    enabled: true
+    excludedNodes: [host1]
+    probeConfiguration:
+      # cEOS is slow to boot; this is a ceiling, not a wait.
+      startupSeconds: 900
+    nodeProbeConfigurations:
+      ceos1:
+        tcpProbeConfiguration:
+          port: 6031
+
+  definition:
+    containerlab: |
+      name: pygnmi
+      topology:
+        kinds:
+          arista_ceos:
+            image: __CEOS_IMAGE__
+            ports:
+              - 6030:6030/tcp
+              - 6031:6031/tcp
+          linux:
+            image: docker.io/nicolaka/netshoot:v0.13
+        nodes:
+          ceos1:
+            kind: arista_ceos
+            startup-config: |
+              hostname ceos1
+              !
+              service routing protocols model multi-agent
+              !
+              username admin privilege 15 role network-admin secret 0 admin
+              !
+              aaa authorization exec default local
+              !
+              interface Ethernet1
+                 description link to host1, streamed by the subscription tests
+                 no switchport
+                 ip address 198.51.100.0/31
+              !
+              interface Management0
+                 description containerlab management
+              !
+              ip routing
+              !
+              ! EOS's default control-plane ACL admits gNMI on 6030 only, so the
+              ! plaintext transport on 6031 would be unreachable. A lab switch
+              ! with nothing to protect admits everything.
+              ip access-list pygnmi-control-plane
+                 10 permit ip any any
+              !
+              system control-plane
+                 ip access-group pygnmi-control-plane in
+              !
+              ! Plaintext only at boot. EOS discards an SSL profile whose
+              ! certificate does not exist yet, so scripts/device-lab.sh adds
+              ! the profile and the TLS transport on 6030 after generating the
+              ! certificate on the switch.
+              ! `operation set namespace` enables union_replace. With it, a
+              ! union_replace replaces the switch's whole configuration with the
+              ! content sent, so the test sends the full running config.
+              management api gnmi
+                 transport grpc plain
+                    port 6031
+                 operation set namespace
+              !
+              end
+          host1:
+            kind: linux
+        links:
+          - endpoints: ["ceos1:eth1", "host1:eth1"]
